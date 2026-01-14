@@ -221,13 +221,14 @@ def resize_image_with_pad(image: np.ndarray, target_height: int, target_width: i
     return np.array(result)
 
 
-def get_camera_images(env, env_idx: int = 0) -> dict:
+def get_camera_images(env, env_idx: int = 0, debug: bool = False) -> dict:
     """
     从环境中获取相机图像。
 
     Args:
         env: Isaac Lab 环境
         env_idx: 环境索引
+        debug: 是否打印调试信息
 
     Returns:
         包含相机图像的字典
@@ -239,11 +240,33 @@ def get_camera_images(env, env_idx: int = 0) -> dict:
     if hasattr(unwrapped_env, "scene"):
         scene = unwrapped_env.scene
 
+        if debug:
+            # 打印场景中所有可用的属性
+            print(f"[DEBUG] Scene type: {type(scene)}")
+            print(f"[DEBUG] Scene attributes: {[attr for attr in dir(scene) if not attr.startswith('_')]}")
+
         # 获取外部相机图像
-        if hasattr(scene, args_cli.external_camera_key):
-            camera = getattr(scene, args_cli.external_camera_key)
-            if hasattr(camera, "data") and hasattr(camera.data, "output"):
-                rgb_data = camera.data.output.get("rgb")
+        external_key = args_cli.external_camera_key
+        if hasattr(scene, external_key):
+            camera = getattr(scene, external_key)
+            if debug:
+                print(f"[DEBUG] External camera type: {type(camera)}")
+                print(f"[DEBUG] Camera has data: {hasattr(camera, 'data')}")
+
+            if hasattr(camera, "data"):
+                camera_data = camera.data
+                if debug:
+                    print(f"[DEBUG] Camera data type: {type(camera_data)}")
+                    print(
+                        f"[DEBUG] Camera data attributes: {[attr for attr in dir(camera_data) if not attr.startswith('_')]}")
+
+                # 尝试多种数据访问方式
+                rgb_data = None
+                if hasattr(camera_data, "output"):
+                    rgb_data = camera_data.output.get("rgb")
+                elif hasattr(camera_data, "rgb"):
+                    rgb_data = camera_data.rgb
+
                 if rgb_data is not None:
                     # RGB 数据格式: [num_envs, H, W, C]
                     img = rgb_data[env_idx].cpu().numpy()
@@ -251,17 +274,30 @@ def get_camera_images(env, env_idx: int = 0) -> dict:
                     if img.shape[-1] == 4:
                         img = img[..., :3]
                     images["external_image"] = img.astype(np.uint8)
+                    if debug:
+                        print(f"[DEBUG] External camera image shape: {img.shape}")
 
         # 获取腕部相机图像
-        if hasattr(scene, args_cli.wrist_camera_key):
-            camera = getattr(scene, args_cli.wrist_camera_key)
-            if hasattr(camera, "data") and hasattr(camera.data, "output"):
-                rgb_data = camera.data.output.get("rgb")
+        wrist_key = args_cli.wrist_camera_key
+        if hasattr(scene, wrist_key):
+            camera = getattr(scene, wrist_key)
+
+            if hasattr(camera, "data"):
+                camera_data = camera.data
+
+                rgb_data = None
+                if hasattr(camera_data, "output"):
+                    rgb_data = camera_data.output.get("rgb")
+                elif hasattr(camera_data, "rgb"):
+                    rgb_data = camera_data.rgb
+
                 if rgb_data is not None:
                     img = rgb_data[env_idx].cpu().numpy()
                     if img.shape[-1] == 4:
                         img = img[..., :3]
                     images["wrist_image"] = img.astype(np.uint8)
+                    if debug:
+                        print(f"[DEBUG] Wrist camera image shape: {img.shape}")
 
     return images
 
@@ -304,10 +340,10 @@ def get_robot_state(env, env_idx: int = 0) -> dict:
 
 
 def prepare_request_data(
-    camera_images: dict,
-    robot_state: dict,
-    prompt: str = "",
-    image_size: int = 224,
+        camera_images: dict,
+        robot_state: dict,
+        prompt: str = "",
+        image_size: int = 224,
 ) -> dict:
     """
     准备发送到策略服务器的请求数据。
@@ -428,6 +464,19 @@ def main():
     unwrapped_env = env.unwrapped
     if hasattr(unwrapped_env, "scene"):
         scene = unwrapped_env.scene
+
+        # 打印场景配置类型
+        print(f"[INFO] Scene config type: {type(scene.cfg).__name__ if hasattr(scene, 'cfg') else 'Unknown'}")
+
+        # 列出场景中所有传感器
+        print("[INFO] Scene sensors:")
+        for attr_name in dir(scene):
+            if not attr_name.startswith('_'):
+                attr = getattr(scene, attr_name, None)
+                # 检查是否是相机类型
+                if attr is not None and 'Camera' in type(attr).__name__:
+                    print(f"       - {attr_name}: {type(attr).__name__}")
+
         has_external = hasattr(scene, args_cli.external_camera_key)
         has_wrist = hasattr(scene, args_cli.wrist_camera_key)
         print(f"[INFO] External camera ({args_cli.external_camera_key}): {'Found' if has_external else 'Not found'}")
@@ -436,6 +485,10 @@ def main():
         if not has_external and not has_wrist:
             print("[WARNING] No cameras found! Make sure to use a task with camera sensors.")
             print("[WARNING] Example: --task Gen3-Reach-Camera-v0")
+            print("[DEBUG] Available scene attributes:")
+            for attr_name in sorted(dir(scene)):
+                if not attr_name.startswith('_'):
+                    print(f"         {attr_name}")
 
     dt = env.unwrapped.physics_dt
 
@@ -458,9 +511,14 @@ def main():
         try:
             # run everything in inference mode
             with torch.inference_mode():
-                # Get camera images and robot state
-                camera_images = get_camera_images(env, env_idx=0)
+                # Get camera images and robot state (debug on first step)
+                debug_mode = (timestep == 0)
+                camera_images = get_camera_images(env, env_idx=0, debug=debug_mode)
                 robot_state = get_robot_state(env, env_idx=0)
+
+                if debug_mode:
+                    print(f"[DEBUG] Camera images keys: {list(camera_images.keys())}")
+                    print(f"[DEBUG] Robot state keys: {list(robot_state.keys())}")
 
                 # Save debug images if requested
                 if args_cli.save_debug_images and timestep % 10 == 0:

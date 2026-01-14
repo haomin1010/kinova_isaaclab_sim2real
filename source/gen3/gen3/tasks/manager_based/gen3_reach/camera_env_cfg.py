@@ -13,6 +13,7 @@
 
 import math
 
+from isaaclab.assets import ArticulationCfg
 from isaaclab.sensors import CameraCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
@@ -20,6 +21,9 @@ from isaaclab.utils import configclass
 import isaaclab.sim as sim_utils
 import isaaclab_tasks.manager_based.manipulation.reach.mdp as mdp
 from isaaclab_tasks.manager_based.manipulation.reach.reach_env_cfg import ReachEnvCfg
+
+# 导入 ReachEnvCfg 使用的场景配置
+from isaaclab_tasks.manager_based.manipulation.reach.reach_env_cfg import ManipulationSceneCfg
 
 ##
 # Pre-defined configs
@@ -33,15 +37,17 @@ from isaaclab_assets import KINOVA_GEN3_N7_CFG  # isort: skip
 
 
 @configclass
-class Gen3ReachCameraSceneCfg(InteractiveSceneCfg):
-    """场景配置，包含机器人和两个相机传感器。"""
+class Gen3ReachCameraSceneCfg(ManipulationSceneCfg):
+    """
+    带相机的场景配置。
 
-    # 继承基础场景配置需要的属性会在 __post_init__ 中设置
+    继承自 ManipulationSceneCfg，添加两个相机传感器。
+    """
 
     # 外部相机 - 固定在场景中，提供第三人称视角
     external_camera: CameraCfg = CameraCfg(
         prim_path="{ENV_REGEX_NS}/ExternalCamera",
-        update_period=0.1,  # 10 Hz
+        update_period=0.0,  # 每个物理步都更新
         height=224,
         width=224,
         data_types=["rgb"],
@@ -61,7 +67,7 @@ class Gen3ReachCameraSceneCfg(InteractiveSceneCfg):
     # 腕部相机 - 安装在机器人末端执行器上
     wrist_camera: CameraCfg = CameraCfg(
         prim_path="{ENV_REGEX_NS}/Robot/end_effector_link/WristCamera",
-        update_period=0.1,  # 10 Hz
+        update_period=0.0,  # 每个物理步都更新
         height=224,
         width=224,
         data_types=["rgb"],
@@ -94,53 +100,15 @@ class Gen3ReachCameraEnvCfg(ReachEnvCfg):
     - wrist_camera: 腕部相机，提供末端执行器视角
     """
 
+    # 使用带相机的场景配置
+    scene: Gen3ReachCameraSceneCfg = Gen3ReachCameraSceneCfg(num_envs=1, env_spacing=2.5)
+
     def __post_init__(self):
         # post init of parent
         super().__post_init__()
 
         # 切换为 Kinova Gen3 机器人
         self.scene.robot = KINOVA_GEN3_N7_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
-
-        # 添加相机传感器
-        # 外部相机 - 固定在场景中
-        self.scene.external_camera = CameraCfg(
-            prim_path="{ENV_REGEX_NS}/ExternalCamera",
-            update_period=0.0,  # 每个物理步都更新
-            height=224,
-            width=224,
-            data_types=["rgb"],
-            spawn=sim_utils.PinholeCameraCfg(
-                focal_length=24.0,
-                focus_distance=400.0,
-                horizontal_aperture=20.955,
-                clipping_range=(0.1, 100.0),
-            ),
-            offset=CameraCfg.OffsetCfg(
-                pos=(1.5, 1.5, 1.2),  # 斜上方位置
-                rot=(0.653, 0.271, 0.271, 0.653),  # 朝向工作区
-                convention="world",
-            ),
-        )
-
-        # 腕部相机 - 安装在末端执行器上
-        self.scene.wrist_camera = CameraCfg(
-            prim_path="{ENV_REGEX_NS}/Robot/end_effector_link/WristCamera",
-            update_period=0.0,  # 每个物理步都更新
-            height=224,
-            width=224,
-            data_types=["rgb"],
-            spawn=sim_utils.PinholeCameraCfg(
-                focal_length=24.0,
-                focus_distance=400.0,
-                horizontal_aperture=20.955,
-                clipping_range=(0.01, 100.0),
-            ),
-            offset=CameraCfg.OffsetCfg(
-                pos=(0.05, 0.0, 0.02),  # 相对于末端执行器
-                rot=(0.5, -0.5, 0.5, -0.5),  # 朝下看
-                convention="ros",
-            ),
-        )
 
         # override events
         self.events.reset_robot_joints.params["position_range"] = (0.75, 1.25)
