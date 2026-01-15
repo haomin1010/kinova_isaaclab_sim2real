@@ -268,7 +268,10 @@ def get_camera_images(env, env_idx: int = 0, timestep: int = 0) -> dict:
     """
     # #region agent log
     import json
-    LOG_PATH = "/home/lihaomin/workspace/kinova_isaaclab_sim2real/.cursor/debug.log"
+    import pathlib
+    LOG_DIR = pathlib.Path(__file__).parent.parent.parent / ".cursor"
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    LOG_PATH = str(LOG_DIR / "debug.log")
     # #endregion
     
     images = {}
