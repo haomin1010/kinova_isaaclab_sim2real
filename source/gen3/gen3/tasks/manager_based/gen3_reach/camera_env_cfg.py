@@ -177,3 +177,6 @@ class Gen3ReachCameraEnvCfg(ReachEnvCfg):
         # override command generator body
         self.commands.ee_pose.body_name = "end_effector_link"
         self.commands.ee_pose.ranges.pitch = (math.pi / 2, math.pi / 2)
+        
+        # 禁用目标位置的可视化标记（坐标轴）
+        self.commands.ee_pose.debug_vis = False
