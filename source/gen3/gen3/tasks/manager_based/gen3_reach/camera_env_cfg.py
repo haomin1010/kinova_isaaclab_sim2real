@@ -13,10 +13,11 @@
 
 import math
 
-from isaaclab.assets import ArticulationCfg
+from isaaclab.assets import ArticulationCfg, RigidObjectCfg
 from isaaclab.sensors import CameraCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
+from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 
 import isaaclab.sim as sim_utils
 import isaaclab_tasks.manager_based.manipulation.reach.mdp as mdp
@@ -88,6 +89,50 @@ class Gen3ReachCameraSceneCfg(ReachSceneCfg):
             # 朝向末端执行器前方（沿 x 轴）
             rot=(0.5, -0.5, 0.5, -0.5),
             convention="ros",
+        ),
+    )
+
+    # 桌子 - 放置物体的平台
+    table: RigidObjectCfg = RigidObjectCfg(
+        prim_path="{ENV_REGEX_NS}/Table",
+        spawn=sim_utils.CuboidCfg(
+            size=(0.6, 0.8, 0.05),  # 60cm x 80cm x 5cm 厚的桌面
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(
+                kinematic_enabled=True,  # 桌子固定不动
+            ),
+            collision_props=sim_utils.CollisionPropertiesCfg(
+                collision_enabled=True,
+            ),
+            visual_material=sim_utils.PreviewSurfaceCfg(
+                diffuse_color=(0.6, 0.4, 0.2),  # 木头颜色
+            ),
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(
+            pos=(0.5, 0.0, 0.025),  # 在机器人前方 0.5m，桌面高度 5cm
+        ),
+    )
+
+    # 可抓取的小球 - 红色球体，放在桌子上
+    target_ball: RigidObjectCfg = RigidObjectCfg(
+        prim_path="{ENV_REGEX_NS}/TargetBall",
+        spawn=sim_utils.SphereCfg(
+            radius=0.04,  # 4cm 半径，适合抓取
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(
+                kinematic_enabled=False,  # 受物理影响
+                disable_gravity=False,    # 受重力影响
+            ),
+            mass_props=sim_utils.MassPropertiesCfg(
+                mass=0.1,  # 100g 质量
+            ),
+            collision_props=sim_utils.CollisionPropertiesCfg(
+                collision_enabled=True,  # 启用碰撞
+            ),
+            visual_material=sim_utils.PreviewSurfaceCfg(
+                diffuse_color=(1.0, 0.0, 0.0),  # 红色
+            ),
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(
+            pos=(0.5, 0.0, 0.1),  # 在桌子上方（桌面高度 0.05 + 球半径 0.04 + 一点余量）
         ),
     )
 
