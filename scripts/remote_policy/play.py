@@ -646,6 +646,8 @@ def main():
                     action_tensor = action_tensor.repeat(args_cli.num_envs, 1)
 
                 # Step environment
+                print("1111")
+                print(action_tensor)
                 obs, rewards, terminated, truncated, info = env.step(action_tensor)
 
             timestep += 1
