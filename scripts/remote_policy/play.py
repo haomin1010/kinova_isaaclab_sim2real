@@ -128,7 +128,7 @@ try:
 except ImportError:
     HAS_OPENPI_CLIENT = False
     print("[WARNING] openpi_client not found. Install with: pip install openpi-client")
-    print("[WARNING] Falling back to simple HTTP client mode.")
+    print("[WARNING] Falling back to simple WebSocket client mode.")
 
 
 @contextlib.contextmanager
@@ -153,37 +153,47 @@ def prevent_keyboard_interrupt():
             raise KeyboardInterrupt
 
 
-class SimpleHttpPolicyClient:
+class SimpleWebsocketPolicyClient:
     """
-    简单的 HTTP 策略客户端，作为 openpi_client 不可用时的备选方案。
+    简单的 WebSocket 策略客户端，作为 openpi_client 不可用时的备选方案。
+    使用 msgpack 进行序列化（与 OpenPI 服务器兼容）。
     """
 
     def __init__(self, host: str, port: int):
         self.host = host
         self.port = port
-        self.url = f"http://{host}:{port}/infer"
+        self._uri = f"ws://{host}:{port}"
+        self._ws = None
+        self._connect()
+
+    def _connect(self):
+        import websockets.sync.client
+        import msgpack
+        import msgpack_numpy
+        msgpack_numpy.patch()
+        
+        print(f"[INFO] Connecting to WebSocket server at {self._uri}...")
+        self._ws = websockets.sync.client.connect(
+            self._uri, compression=None, max_size=None
+        )
+        # 接收服务器元数据
+        metadata = msgpack.unpackb(self._ws.recv(), raw=False)
+        print(f"[INFO] Connected! Server metadata: {metadata}")
 
     def infer(self, request_data: dict) -> dict:
-        import requests
+        import msgpack
+        import msgpack_numpy
+        msgpack_numpy.patch()
 
-        # Convert numpy arrays to lists for JSON serialization
-        serializable_data = {}
-        for key, value in request_data.items():
-            if isinstance(value, np.ndarray):
-                serializable_data[key] = value.tolist()
-            elif isinstance(value, torch.Tensor):
-                serializable_data[key] = value.cpu().numpy().tolist()
-            else:
-                serializable_data[key] = value
-
-        response = requests.post(self.url, json=serializable_data)
-        response.raise_for_status()
-        result = response.json()
-
-        # Convert actions back to numpy array
-        if "actions" in result:
-            result["actions"] = np.array(result["actions"])
-
+        # 使用 msgpack 序列化（支持 numpy 数组）
+        data = msgpack.packb(request_data, default=msgpack_numpy.encode)
+        self._ws.send(data)
+        response = self._ws.recv()
+        
+        if isinstance(response, str):
+            raise RuntimeError(f"Error from server: {response}")
+        
+        result = msgpack.unpackb(response, raw=False, object_hook=msgpack_numpy.decode)
         return result
 
 
@@ -244,26 +254,31 @@ def get_camera_images(env, env_idx: int = 0, debug: bool = False) -> dict:
             # 打印场景中所有可用的属性
             print(f"[DEBUG] Scene type: {type(scene)}")
             print(f"[DEBUG] Scene attributes: {[attr for attr in dir(scene) if not attr.startswith('_')]}")
+            # 打印 sensors 字典内容
+            if hasattr(scene, "sensors"):
+                print(f"[DEBUG] Scene sensors keys: {list(scene.sensors.keys())}")
 
-        # 获取外部相机图像
-        external_key = args_cli.external_camera_key
-        if hasattr(scene, external_key):
-            camera = getattr(scene, external_key)
+        # 定义一个辅助函数来获取相机图像
+        def _get_camera_rgb(camera, camera_name: str):
+            if camera is None:
+                return None
             if debug:
-                print(f"[DEBUG] External camera type: {type(camera)}")
-                print(f"[DEBUG] Camera has data: {hasattr(camera, 'data')}")
+                print(f"[DEBUG] {camera_name} type: {type(camera)}")
+                print(f"[DEBUG] {camera_name} has data: {hasattr(camera, 'data')}")
 
             if hasattr(camera, "data"):
                 camera_data = camera.data
                 if debug:
-                    print(f"[DEBUG] Camera data type: {type(camera_data)}")
-                    print(
-                        f"[DEBUG] Camera data attributes: {[attr for attr in dir(camera_data) if not attr.startswith('_')]}")
+                    print(f"[DEBUG] {camera_name} data type: {type(camera_data)}")
+                    data_attrs = [attr for attr in dir(camera_data) if not attr.startswith('_')]
+                    print(f"[DEBUG] {camera_name} data attributes: {data_attrs}")
 
                 # 尝试多种数据访问方式
                 rgb_data = None
                 if hasattr(camera_data, "output"):
                     rgb_data = camera_data.output.get("rgb")
+                    if debug:
+                        print(f"[DEBUG] {camera_name} output keys: {list(camera_data.output.keys()) if camera_data.output else 'None'}")
                 elif hasattr(camera_data, "rgb"):
                     rgb_data = camera_data.rgb
 
@@ -273,42 +288,52 @@ def get_camera_images(env, env_idx: int = 0, debug: bool = False) -> dict:
                     # 移除 alpha 通道（如果存在）
                     if img.shape[-1] == 4:
                         img = img[..., :3]
-                    images["external_image"] = img.astype(np.uint8)
                     if debug:
-                        print(f"[DEBUG] External camera image shape: {img.shape}")
+                        print(f"[DEBUG] {camera_name} image shape: {img.shape}")
+                    return img.astype(np.uint8)
+            return None
 
-        # 获取腕部相机图像
+        external_key = args_cli.external_camera_key
         wrist_key = args_cli.wrist_camera_key
+
+        # 方法 1：直接作为场景属性访问
+        if hasattr(scene, external_key):
+            camera = getattr(scene, external_key)
+            img = _get_camera_rgb(camera, "external_camera")
+            if img is not None:
+                images["external_image"] = img
+
         if hasattr(scene, wrist_key):
             camera = getattr(scene, wrist_key)
+            img = _get_camera_rgb(camera, "wrist_camera")
+            if img is not None:
+                images["wrist_image"] = img
 
-            if hasattr(camera, "data"):
-                camera_data = camera.data
+        # 方法 2：通过 sensors 字典访问
+        if hasattr(scene, "sensors") and isinstance(scene.sensors, dict):
+            if external_key in scene.sensors and "external_image" not in images:
+                camera = scene.sensors[external_key]
+                img = _get_camera_rgb(camera, "external_camera (from sensors)")
+                if img is not None:
+                    images["external_image"] = img
 
-                rgb_data = None
-                if hasattr(camera_data, "output"):
-                    rgb_data = camera_data.output.get("rgb")
-                elif hasattr(camera_data, "rgb"):
-                    rgb_data = camera_data.rgb
-
-                if rgb_data is not None:
-                    img = rgb_data[env_idx].cpu().numpy()
-                    if img.shape[-1] == 4:
-                        img = img[..., :3]
-                    images["wrist_image"] = img.astype(np.uint8)
-                    if debug:
-                        print(f"[DEBUG] Wrist camera image shape: {img.shape}")
+            if wrist_key in scene.sensors and "wrist_image" not in images:
+                camera = scene.sensors[wrist_key]
+                img = _get_camera_rgb(camera, "wrist_camera (from sensors)")
+                if img is not None:
+                    images["wrist_image"] = img
 
     return images
 
 
-def get_robot_state(env, env_idx: int = 0) -> dict:
+def get_robot_state(env, env_idx: int = 0, debug: bool = False) -> dict:
     """
     从环境中获取机器人状态。
 
     Args:
         env: Isaac Lab 环境
         env_idx: 环境索引
+        debug: 是否打印调试信息
 
     Returns:
         包含机器人状态的字典
@@ -316,25 +341,64 @@ def get_robot_state(env, env_idx: int = 0) -> dict:
     state = {}
     unwrapped_env = env.unwrapped
 
-    if hasattr(unwrapped_env, "scene") and hasattr(unwrapped_env.scene, "robot"):
-        robot = unwrapped_env.scene.robot
+    if debug:
+        print(f"[DEBUG] Looking for robot in scene...")
+
+    # 方法 1：直接通过 scene.robot 访问
+    robot = None
+    if hasattr(unwrapped_env, "scene"):
+        scene = unwrapped_env.scene
+        
+        if hasattr(scene, "robot"):
+            robot = scene.robot
+            if debug:
+                print(f"[DEBUG] Found robot via scene.robot")
+        
+        # 方法 2：通过 articulations 字典访问
+        elif hasattr(scene, "articulations") and isinstance(scene.articulations, dict):
+            if debug:
+                print(f"[DEBUG] Scene articulations keys: {list(scene.articulations.keys())}")
+            # 尝试查找名为 "robot" 的 articulation
+            if "robot" in scene.articulations:
+                robot = scene.articulations["robot"]
+                if debug:
+                    print(f"[DEBUG] Found robot via scene.articulations['robot']")
+            # 或者取第一个 articulation
+            elif len(scene.articulations) > 0:
+                robot_key = list(scene.articulations.keys())[0]
+                robot = scene.articulations[robot_key]
+                if debug:
+                    print(f"[DEBUG] Found robot via scene.articulations['{robot_key}']")
+
+    if robot is not None:
+        if debug:
+            print(f"[DEBUG] Robot type: {type(robot)}")
+            print(f"[DEBUG] Robot has data: {hasattr(robot, 'data')}")
+            if hasattr(robot, 'data'):
+                data_attrs = [attr for attr in dir(robot.data) if not attr.startswith('_')]
+                print(f"[DEBUG] Robot data attributes: {data_attrs}")
 
         # 获取关节位置
-        if hasattr(robot.data, "joint_pos"):
+        if hasattr(robot, 'data') and hasattr(robot.data, "joint_pos"):
             joint_pos = robot.data.joint_pos[env_idx].cpu().numpy()
             state["joint_position"] = joint_pos
+            if debug:
+                print(f"[DEBUG] Joint position shape: {joint_pos.shape}")
 
         # 获取关节速度
-        if hasattr(robot.data, "joint_vel"):
+        if hasattr(robot, 'data') and hasattr(robot.data, "joint_vel"):
             joint_vel = robot.data.joint_vel[env_idx].cpu().numpy()
             state["joint_velocity"] = joint_vel
 
         # 获取末端执行器位姿（如果可用）
-        if hasattr(robot.data, "body_pos_w"):
+        if hasattr(robot, 'data') and hasattr(robot.data, "body_pos_w"):
             # 尝试获取末端执行器的位置
             # 注意：这里的索引可能需要根据具体机器人调整
             ee_pos = robot.data.body_pos_w[env_idx, -1].cpu().numpy()
             state["ee_position"] = ee_pos
+    else:
+        if debug:
+            print(f"[DEBUG] Robot not found in scene!")
 
     return state
 
@@ -417,8 +481,8 @@ def main():
         )
         print("[INFO] Connected to policy server!")
     else:
-        print(f"[INFO] Using simple HTTP client: {args_cli.remote_host}:{args_cli.remote_port}")
-        policy_client = SimpleHttpPolicyClient(args_cli.remote_host, args_cli.remote_port)
+        print(f"[INFO] Using simple WebSocket client: {args_cli.remote_host}:{args_cli.remote_port}")
+        policy_client = SimpleWebsocketPolicyClient(args_cli.remote_host, args_cli.remote_port)
 
     # parse configuration
     env_cfg = parse_env_cfg(
@@ -514,7 +578,7 @@ def main():
                 # Get camera images and robot state (debug on first step)
                 debug_mode = (timestep == 0)
                 camera_images = get_camera_images(env, env_idx=0, debug=debug_mode)
-                robot_state = get_robot_state(env, env_idx=0)
+                robot_state = get_robot_state(env, env_idx=0, debug=debug_mode)
 
                 if debug_mode:
                     print(f"[DEBUG] Camera images keys: {list(camera_images.keys())}")
