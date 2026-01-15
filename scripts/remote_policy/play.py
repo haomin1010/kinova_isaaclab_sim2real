@@ -555,27 +555,40 @@ def main():
         # 打印场景配置类型
         print(f"[INFO] Scene config type: {type(scene.cfg).__name__ if hasattr(scene, 'cfg') else 'Unknown'}")
 
-        # 列出场景中所有传感器
-        print("[INFO] Scene sensors:")
-        for attr_name in dir(scene):
-            if not attr_name.startswith('_'):
-                attr = getattr(scene, attr_name, None)
-                # 检查是否是相机类型
-                if attr is not None and 'Camera' in type(attr).__name__:
-                    print(f"       - {attr_name}: {type(attr).__name__}")
+        # 检查 scene.sensors 字典
+        print("[INFO] Checking scene.sensors dict...")
+        if hasattr(scene, "sensors") and isinstance(scene.sensors, dict):
+            print(f"[INFO] scene.sensors keys: {list(scene.sensors.keys())}")
+            for key, sensor in scene.sensors.items():
+                print(f"       - {key}: {type(sensor).__name__}")
+        else:
+            print("[WARNING] scene.sensors not found or not a dict!")
+            print(f"[DEBUG] scene.sensors type: {type(getattr(scene, 'sensors', None))}")
 
+        # 检查直接属性
         has_external = hasattr(scene, args_cli.external_camera_key)
         has_wrist = hasattr(scene, args_cli.wrist_camera_key)
-        print(f"[INFO] External camera ({args_cli.external_camera_key}): {'Found' if has_external else 'Not found'}")
-        print(f"[INFO] Wrist camera ({args_cli.wrist_camera_key}): {'Found' if has_wrist else 'Not found'}")
+        
+        # 也检查 sensors 字典
+        sensors_dict = getattr(scene, "sensors", {}) or {}
+        has_external_in_sensors = args_cli.external_camera_key in sensors_dict
+        has_wrist_in_sensors = args_cli.wrist_camera_key in sensors_dict
+        
+        print(f"[INFO] External camera ({args_cli.external_camera_key}):")
+        print(f"       - as attribute: {'Found' if has_external else 'Not found'}")
+        print(f"       - in sensors dict: {'Found' if has_external_in_sensors else 'Not found'}")
+        print(f"[INFO] Wrist camera ({args_cli.wrist_camera_key}):")
+        print(f"       - as attribute: {'Found' if has_wrist else 'Not found'}")
+        print(f"       - in sensors dict: {'Found' if has_wrist_in_sensors else 'Not found'}")
 
-        if not has_external and not has_wrist:
+        if not (has_external or has_external_in_sensors) and not (has_wrist or has_wrist_in_sensors):
             print("[WARNING] No cameras found! Make sure to use a task with camera sensors.")
             print("[WARNING] Example: --task Gen3-Reach-Camera-v0")
-            print("[DEBUG] Available scene attributes:")
+            print("[DEBUG] Available scene attributes (non-private):")
             for attr_name in sorted(dir(scene)):
                 if not attr_name.startswith('_'):
-                    print(f"         {attr_name}")
+                    attr = getattr(scene, attr_name, None)
+                    print(f"         {attr_name}: {type(attr).__name__ if attr is not None else 'None'}")
 
     dt = env.unwrapped.physics_dt
 
@@ -594,6 +607,7 @@ def main():
     # simulate environment
     while simulation_app.is_running() and timestep < args_cli.max_timesteps:
         start_time = time.time()
+        print("2222")
 
         try:
             # run everything in inference mode
@@ -602,7 +616,7 @@ def main():
                 debug_mode = (timestep == 0)
                 camera_images = get_camera_images(env, env_idx=0, debug=debug_mode)
                 robot_state = get_robot_state(env, env_idx=0, debug=debug_mode)
-
+                print("3333")   
                 if debug_mode:
                     print(f"[DEBUG] Camera images keys: {list(camera_images.keys())}")
                     print(f"[DEBUG] Robot state keys: {list(robot_state.keys())}")
@@ -610,7 +624,7 @@ def main():
                 # Save debug images if requested
                 if args_cli.save_debug_images and timestep % 10 == 0:
                     save_debug_images(camera_images, timestep)
-
+                print("4444")   
                 # Query remote server for new action chunk if needed
                 if actions_from_chunk_completed == 0 or actions_from_chunk_completed >= args_cli.open_loop_horizon:
                     actions_from_chunk_completed = 0
@@ -622,7 +636,7 @@ def main():
                         prompt=args_cli.prompt,
                         image_size=args_cli.image_size,
                     )
-
+                    print("5555")   
                     # Query remote policy server
                     with prevent_keyboard_interrupt():
                         response = policy_client.infer(request_data)
