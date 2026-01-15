@@ -540,7 +540,24 @@ def main():
     print(f"[INFO] Task: {args_cli.task}")
     print(f"[INFO] Observation space: {env.observation_space}")
     print(f"[INFO] Action space: {env.action_space}")
+    print(f"[INFO] Action space dimension: {env.action_space.shape}")
     print(f"[INFO] Number of environments: {args_cli.num_envs}")
+    
+    # 打印机器人关节信息
+    unwrapped = env.unwrapped
+    if hasattr(unwrapped, "scene"):
+        scene = unwrapped.scene
+        if hasattr(scene, "articulations") and "robot" in scene.articulations:
+            robot = scene.articulations["robot"]
+            print(f"[INFO] Robot joint names: {robot.joint_names}")
+            print(f"[INFO] Robot num joints: {len(robot.joint_names)}")
+        # 检查 isaaclab_assets 中可用的 Kinova 配置
+        try:
+            import isaaclab_assets
+            kinova_configs = [name for name in dir(isaaclab_assets) if 'KINOVA' in name.upper() or 'GEN3' in name.upper()]
+            print(f"[INFO] Available Kinova configs in isaaclab_assets: {kinova_configs}")
+        except Exception as e:
+            print(f"[WARNING] Could not list isaaclab_assets: {e}")
     print(f"[INFO] Open-loop horizon: {args_cli.open_loop_horizon}")
     print(f"[INFO] Max timesteps: {args_cli.max_timesteps}")
     print(f"[INFO] Image size: {args_cli.image_size}x{args_cli.image_size}")
@@ -607,7 +624,6 @@ def main():
     # simulate environment
     while simulation_app.is_running() and timestep < args_cli.max_timesteps:
         start_time = time.time()
-        print("2222")
 
         try:
             # run everything in inference mode
@@ -616,7 +632,7 @@ def main():
                 debug_mode = (timestep == 0)
                 camera_images = get_camera_images(env, env_idx=0, debug=debug_mode)
                 robot_state = get_robot_state(env, env_idx=0, debug=debug_mode)
-                print("3333")   
+ 
                 if debug_mode:
                     print(f"[DEBUG] Camera images keys: {list(camera_images.keys())}")
                     print(f"[DEBUG] Robot state keys: {list(robot_state.keys())}")
@@ -624,7 +640,6 @@ def main():
                 # Save debug images if requested
                 if args_cli.save_debug_images and timestep % 10 == 0:
                     save_debug_images(camera_images, timestep)
-                print("4444")   
                 # Query remote server for new action chunk if needed
                 if actions_from_chunk_completed == 0 or actions_from_chunk_completed >= args_cli.open_loop_horizon:
                     actions_from_chunk_completed = 0
@@ -636,7 +651,6 @@ def main():
                         prompt=args_cli.prompt,
                         image_size=args_cli.image_size,
                     )
-                    print("5555")   
                     # Query remote policy server
                     with prevent_keyboard_interrupt():
                         response = policy_client.infer(request_data)
@@ -660,8 +674,7 @@ def main():
                     action_tensor = action_tensor.repeat(args_cli.num_envs, 1)
 
                 # Step environment
-                print("1111")
-                print(action_tensor)
+                # print(action_tensor)
                 obs, rewards, terminated, truncated, info = env.step(action_tensor)
 
             timestep += 1
