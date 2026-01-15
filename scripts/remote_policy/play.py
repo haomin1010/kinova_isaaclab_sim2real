@@ -254,14 +254,13 @@ def resize_image_with_pad(image: np.ndarray, target_height: int, target_width: i
     return np.array(result)
 
 
-def get_camera_images(env, env_idx: int = 0, debug: bool = False) -> dict:
+def get_camera_images(env, env_idx: int = 0) -> dict:
     """
     从环境中获取相机图像。
 
     Args:
         env: Isaac Lab 环境
         env_idx: 环境索引
-        debug: 是否打印调试信息
 
     Returns:
         包含相机图像的字典
@@ -269,94 +268,50 @@ def get_camera_images(env, env_idx: int = 0, debug: bool = False) -> dict:
     images = {}
     unwrapped_env = env.unwrapped
 
-    # 尝试从场景中获取相机传感器
-    if hasattr(unwrapped_env, "scene"):
-        scene = unwrapped_env.scene
+    if not hasattr(unwrapped_env, "scene"):
+        return images
 
-        if debug:
-            # 打印场景中所有可用的属性
-            print(f"[DEBUG] Scene type: {type(scene)}")
-            print(f"[DEBUG] Scene attributes: {[attr for attr in dir(scene) if not attr.startswith('_')]}")
-            # 打印 sensors 字典内容
-            if hasattr(scene, "sensors"):
-                print(f"[DEBUG] Scene sensors keys: {list(scene.sensors.keys())}")
+    scene = unwrapped_env.scene
+    sensors_dict = getattr(scene, "sensors", {}) or {}
 
-        # 定义一个辅助函数来获取相机图像
-        def _get_camera_rgb(camera, camera_name: str):
-            if camera is None:
-                return None
-            if debug:
-                print(f"[DEBUG] {camera_name} type: {type(camera)}")
-                print(f"[DEBUG] {camera_name} has data: {hasattr(camera, 'data')}")
-
-            if hasattr(camera, "data"):
-                camera_data = camera.data
-                if debug:
-                    print(f"[DEBUG] {camera_name} data type: {type(camera_data)}")
-                    data_attrs = [attr for attr in dir(camera_data) if not attr.startswith('_')]
-                    print(f"[DEBUG] {camera_name} data attributes: {data_attrs}")
-
-                # 尝试多种数据访问方式
-                rgb_data = None
-                if hasattr(camera_data, "output"):
-                    rgb_data = camera_data.output.get("rgb")
-                    if debug:
-                        print(f"[DEBUG] {camera_name} output keys: {list(camera_data.output.keys()) if camera_data.output else 'None'}")
-                elif hasattr(camera_data, "rgb"):
-                    rgb_data = camera_data.rgb
-
-                if rgb_data is not None:
-                    # RGB 数据格式: [num_envs, H, W, C]
-                    img = rgb_data[env_idx].cpu().numpy()
-                    # 移除 alpha 通道（如果存在）
-                    if img.shape[-1] == 4:
-                        img = img[..., :3]
-                    if debug:
-                        print(f"[DEBUG] {camera_name} image shape: {img.shape}")
-                    return img.astype(np.uint8)
+    def _get_camera_rgb(camera):
+        """从相机传感器获取 RGB 图像"""
+        if camera is None or not hasattr(camera, "data"):
             return None
+        camera_data = camera.data
+        rgb_data = None
+        if hasattr(camera_data, "output"):
+            rgb_data = camera_data.output.get("rgb")
+        elif hasattr(camera_data, "rgb"):
+            rgb_data = camera_data.rgb
+        if rgb_data is not None:
+            img = rgb_data[env_idx].cpu().numpy()
+            if img.shape[-1] == 4:
+                img = img[..., :3]
+            return img.astype(np.uint8)
+        return None
 
-        external_key = args_cli.external_camera_key
-        wrist_key = args_cli.wrist_camera_key
+    # 通过 sensors 字典访问相机
+    if args_cli.external_camera_key in sensors_dict:
+        img = _get_camera_rgb(sensors_dict[args_cli.external_camera_key])
+        if img is not None:
+            images["external_image"] = img
 
-        # 方法 1：直接作为场景属性访问
-        if hasattr(scene, external_key):
-            camera = getattr(scene, external_key)
-            img = _get_camera_rgb(camera, "external_camera")
-            if img is not None:
-                images["external_image"] = img
-
-        if hasattr(scene, wrist_key):
-            camera = getattr(scene, wrist_key)
-            img = _get_camera_rgb(camera, "wrist_camera")
-            if img is not None:
-                images["wrist_image"] = img
-
-        # 方法 2：通过 sensors 字典访问
-        if hasattr(scene, "sensors") and isinstance(scene.sensors, dict):
-            if external_key in scene.sensors and "external_image" not in images:
-                camera = scene.sensors[external_key]
-                img = _get_camera_rgb(camera, "external_camera (from sensors)")
-                if img is not None:
-                    images["external_image"] = img
-
-            if wrist_key in scene.sensors and "wrist_image" not in images:
-                camera = scene.sensors[wrist_key]
-                img = _get_camera_rgb(camera, "wrist_camera (from sensors)")
-                if img is not None:
-                    images["wrist_image"] = img
+    if args_cli.wrist_camera_key in sensors_dict:
+        img = _get_camera_rgb(sensors_dict[args_cli.wrist_camera_key])
+        if img is not None:
+            images["wrist_image"] = img
 
     return images
 
 
-def get_robot_state(env, env_idx: int = 0, debug: bool = False) -> dict:
+def get_robot_state(env, env_idx: int = 0) -> dict:
     """
     从环境中获取机器人状态。
 
     Args:
         env: Isaac Lab 环境
         env_idx: 环境索引
-        debug: 是否打印调试信息
 
     Returns:
         包含机器人状态的字典
@@ -364,64 +319,31 @@ def get_robot_state(env, env_idx: int = 0, debug: bool = False) -> dict:
     state = {}
     unwrapped_env = env.unwrapped
 
-    if debug:
-        print(f"[DEBUG] Looking for robot in scene...")
+    if not hasattr(unwrapped_env, "scene"):
+        return state
 
-    # 方法 1：直接通过 scene.robot 访问
+    scene = unwrapped_env.scene
     robot = None
-    if hasattr(unwrapped_env, "scene"):
-        scene = unwrapped_env.scene
-        
-        if hasattr(scene, "robot"):
-            robot = scene.robot
-            if debug:
-                print(f"[DEBUG] Found robot via scene.robot")
-        
-        # 方法 2：通过 articulations 字典访问
-        elif hasattr(scene, "articulations") and isinstance(scene.articulations, dict):
-            if debug:
-                print(f"[DEBUG] Scene articulations keys: {list(scene.articulations.keys())}")
-            # 尝试查找名为 "robot" 的 articulation
-            if "robot" in scene.articulations:
-                robot = scene.articulations["robot"]
-                if debug:
-                    print(f"[DEBUG] Found robot via scene.articulations['robot']")
-            # 或者取第一个 articulation
-            elif len(scene.articulations) > 0:
-                robot_key = list(scene.articulations.keys())[0]
-                robot = scene.articulations[robot_key]
-                if debug:
-                    print(f"[DEBUG] Found robot via scene.articulations['{robot_key}']")
 
-    if robot is not None:
-        if debug:
-            print(f"[DEBUG] Robot type: {type(robot)}")
-            print(f"[DEBUG] Robot has data: {hasattr(robot, 'data')}")
-            if hasattr(robot, 'data'):
-                data_attrs = [attr for attr in dir(robot.data) if not attr.startswith('_')]
-                print(f"[DEBUG] Robot data attributes: {data_attrs}")
+    # 通过 scene.robot 或 articulations 字典获取机器人
+    if hasattr(scene, "robot"):
+        robot = scene.robot
+    elif hasattr(scene, "articulations") and isinstance(scene.articulations, dict):
+        if "robot" in scene.articulations:
+            robot = scene.articulations["robot"]
 
+    if robot is not None and hasattr(robot, 'data'):
         # 获取关节位置
-        if hasattr(robot, 'data') and hasattr(robot.data, "joint_pos"):
-            joint_pos = robot.data.joint_pos[env_idx].cpu().numpy()
-            state["joint_position"] = joint_pos
-            if debug:
-                print(f"[DEBUG] Joint position shape: {joint_pos.shape}")
+        if hasattr(robot.data, "joint_pos"):
+            state["joint_position"] = robot.data.joint_pos[env_idx].cpu().numpy()
 
         # 获取关节速度
-        if hasattr(robot, 'data') and hasattr(robot.data, "joint_vel"):
-            joint_vel = robot.data.joint_vel[env_idx].cpu().numpy()
-            state["joint_velocity"] = joint_vel
+        if hasattr(robot.data, "joint_vel"):
+            state["joint_velocity"] = robot.data.joint_vel[env_idx].cpu().numpy()
 
-        # 获取末端执行器位姿（如果可用）
-        if hasattr(robot, 'data') and hasattr(robot.data, "body_pos_w"):
-            # 尝试获取末端执行器的位置
-            # 注意：这里的索引可能需要根据具体机器人调整
-            ee_pos = robot.data.body_pos_w[env_idx, -1].cpu().numpy()
-            state["ee_position"] = ee_pos
-    else:
-        if debug:
-            print(f"[DEBUG] Robot not found in scene!")
+        # 获取末端执行器位置
+        if hasattr(robot.data, "body_pos_w"):
+            state["ee_position"] = robot.data.body_pos_w[env_idx, -1].cpu().numpy()
 
     return state
 
@@ -538,29 +460,10 @@ def main():
 
     # print info
     print(f"[INFO] Task: {args_cli.task}")
-    print(f"[INFO] Observation space: {env.observation_space}")
-    print(f"[INFO] Action space: {env.action_space}")
-    print(f"[INFO] Action space dimension: {env.action_space.shape}")
+    print(f"[INFO] Action space: {env.action_space.shape}")
     print(f"[INFO] Number of environments: {args_cli.num_envs}")
-    
-    # 打印机器人关节信息
-    unwrapped = env.unwrapped
-    if hasattr(unwrapped, "scene"):
-        scene = unwrapped.scene
-        if hasattr(scene, "articulations") and "robot" in scene.articulations:
-            robot = scene.articulations["robot"]
-            print(f"[INFO] Robot joint names: {robot.joint_names}")
-            print(f"[INFO] Robot num joints: {len(robot.joint_names)}")
-        # 检查 isaaclab_assets 中可用的 Kinova 配置
-        try:
-            import isaaclab_assets
-            kinova_configs = [name for name in dir(isaaclab_assets) if 'KINOVA' in name.upper() or 'GEN3' in name.upper()]
-            print(f"[INFO] Available Kinova configs in isaaclab_assets: {kinova_configs}")
-        except Exception as e:
-            print(f"[WARNING] Could not list isaaclab_assets: {e}")
     print(f"[INFO] Open-loop horizon: {args_cli.open_loop_horizon}")
     print(f"[INFO] Max timesteps: {args_cli.max_timesteps}")
-    print(f"[INFO] Image size: {args_cli.image_size}x{args_cli.image_size}")
     if args_cli.prompt:
         print(f"[INFO] Prompt: {args_cli.prompt}")
 
@@ -568,44 +471,15 @@ def main():
     unwrapped_env = env.unwrapped
     if hasattr(unwrapped_env, "scene"):
         scene = unwrapped_env.scene
-
-        # 打印场景配置类型
-        print(f"[INFO] Scene config type: {type(scene.cfg).__name__ if hasattr(scene, 'cfg') else 'Unknown'}")
-
-        # 检查 scene.sensors 字典
-        print("[INFO] Checking scene.sensors dict...")
-        if hasattr(scene, "sensors") and isinstance(scene.sensors, dict):
-            print(f"[INFO] scene.sensors keys: {list(scene.sensors.keys())}")
-            for key, sensor in scene.sensors.items():
-                print(f"       - {key}: {type(sensor).__name__}")
-        else:
-            print("[WARNING] scene.sensors not found or not a dict!")
-            print(f"[DEBUG] scene.sensors type: {type(getattr(scene, 'sensors', None))}")
-
-        # 检查直接属性
-        has_external = hasattr(scene, args_cli.external_camera_key)
-        has_wrist = hasattr(scene, args_cli.wrist_camera_key)
-        
-        # 也检查 sensors 字典
         sensors_dict = getattr(scene, "sensors", {}) or {}
-        has_external_in_sensors = args_cli.external_camera_key in sensors_dict
-        has_wrist_in_sensors = args_cli.wrist_camera_key in sensors_dict
+        has_external = args_cli.external_camera_key in sensors_dict
+        has_wrist = args_cli.wrist_camera_key in sensors_dict
         
-        print(f"[INFO] External camera ({args_cli.external_camera_key}):")
-        print(f"       - as attribute: {'Found' if has_external else 'Not found'}")
-        print(f"       - in sensors dict: {'Found' if has_external_in_sensors else 'Not found'}")
-        print(f"[INFO] Wrist camera ({args_cli.wrist_camera_key}):")
-        print(f"       - as attribute: {'Found' if has_wrist else 'Not found'}")
-        print(f"       - in sensors dict: {'Found' if has_wrist_in_sensors else 'Not found'}")
+        print(f"[INFO] External camera: {'Found' if has_external else 'Not found'}")
+        print(f"[INFO] Wrist camera: {'Found' if has_wrist else 'Not found'}")
 
-        if not (has_external or has_external_in_sensors) and not (has_wrist or has_wrist_in_sensors):
+        if not has_external and not has_wrist:
             print("[WARNING] No cameras found! Make sure to use a task with camera sensors.")
-            print("[WARNING] Example: --task Gen3-Reach-Camera-v0")
-            print("[DEBUG] Available scene attributes (non-private):")
-            for attr_name in sorted(dir(scene)):
-                if not attr_name.startswith('_'):
-                    attr = getattr(scene, attr_name, None)
-                    print(f"         {attr_name}: {type(attr).__name__ if attr is not None else 'None'}")
 
     dt = env.unwrapped.physics_dt
 
@@ -628,14 +502,9 @@ def main():
         try:
             # run everything in inference mode
             with torch.inference_mode():
-                # Get camera images and robot state (debug on first step)
-                debug_mode = (timestep == 0)
-                camera_images = get_camera_images(env, env_idx=0, debug=debug_mode)
-                robot_state = get_robot_state(env, env_idx=0, debug=debug_mode)
- 
-                if debug_mode:
-                    print(f"[DEBUG] Camera images keys: {list(camera_images.keys())}")
-                    print(f"[DEBUG] Robot state keys: {list(robot_state.keys())}")
+                # Get camera images and robot state
+                camera_images = get_camera_images(env, env_idx=0)
+                robot_state = get_robot_state(env, env_idx=0)
 
                 # Save debug images if requested
                 if args_cli.save_debug_images and timestep % 10 == 0:
@@ -664,6 +533,11 @@ def main():
                 # Get current action from chunk
                 action = pred_action_chunk[actions_from_chunk_completed]
                 actions_from_chunk_completed += 1
+                print(action)
+                # 裁剪动作维度：OpenPI 输出 8 维（7关节 + 1夹爪），环境只需要 7 维
+                # 丢弃最后一维（夹爪）
+                if action.shape[-1] == 8:
+                    action = action[..., :7]
 
                 # Convert to torch tensor and expand for all environments
                 action_tensor = torch.tensor(action, device=env.unwrapped.device, dtype=torch.float32)
@@ -674,7 +548,6 @@ def main():
                     action_tensor = action_tensor.repeat(args_cli.num_envs, 1)
 
                 # Step environment
-                # print(action_tensor)
                 obs, rewards, terminated, truncated, info = env.step(action_tensor)
 
             timestep += 1
