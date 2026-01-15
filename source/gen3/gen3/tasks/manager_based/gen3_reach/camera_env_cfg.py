@@ -61,9 +61,9 @@ class Gen3ReachCameraSceneCfg(ReachSceneCfg):
         offset=CameraCfg.OffsetCfg(
             # 相机位置：在机器人前方 1m，侧面 0.5m，高度 0.8m
             pos=(1.0, 0.5, 0.8),
-            # 四元数使相机朝向原点（机器人基座）
-            # 这个四元数让相机面向 -x 方向并稍微向下看
-            rot=(0.683, 0.183, 0.183, 0.683),
+            # 四元数 (w, x, y, z)：让相机朝向原点
+            # 绕 Z 轴旋转约 155°（面向 -X -Y 方向），再绕新 X 轴向下倾斜约 25°
+            rot=(0.430, 0.177, -0.383, 0.798),
             convention="world",
         ),
     )
