@@ -156,7 +156,7 @@ def prevent_keyboard_interrupt():
 class SimpleWebsocketPolicyClient:
     """
     简单的 WebSocket 策略客户端，作为 openpi_client 不可用时的备选方案。
-    使用 msgpack 进行序列化（与 OpenPI 服务器兼容）。
+    使用与 OpenPI 服务器兼容的 msgpack 序列化格式。
     """
 
     def __init__(self, host: str, port: int):
@@ -166,34 +166,57 @@ class SimpleWebsocketPolicyClient:
         self._ws = None
         self._connect()
 
+    @staticmethod
+    def _pack_array(obj):
+        """OpenPI 兼容的 numpy 数组序列化"""
+        if isinstance(obj, np.ndarray):
+            return {
+                b"__ndarray__": True,
+                b"data": obj.tobytes(),
+                b"dtype": obj.dtype.str,
+                b"shape": obj.shape,
+            }
+        if isinstance(obj, np.generic):
+            return {
+                b"__npgeneric__": True,
+                b"data": obj.item(),
+                b"dtype": obj.dtype.str,
+            }
+        return obj
+
+    @staticmethod
+    def _unpack_array(obj):
+        """OpenPI 兼容的 numpy 数组反序列化"""
+        if b"__ndarray__" in obj:
+            return np.ndarray(buffer=obj[b"data"], dtype=np.dtype(obj[b"dtype"]), shape=obj[b"shape"])
+        if b"__npgeneric__" in obj:
+            return np.dtype(obj[b"dtype"]).type(obj[b"data"])
+        return obj
+
     def _connect(self):
         import websockets.sync.client
         import msgpack
-        import msgpack_numpy
-        msgpack_numpy.patch()
         
         print(f"[INFO] Connecting to WebSocket server at {self._uri}...")
         self._ws = websockets.sync.client.connect(
             self._uri, compression=None, max_size=None
         )
         # 接收服务器元数据
-        metadata = msgpack.unpackb(self._ws.recv(), raw=False)
+        metadata = msgpack.unpackb(self._ws.recv(), object_hook=self._unpack_array)
         print(f"[INFO] Connected! Server metadata: {metadata}")
 
     def infer(self, request_data: dict) -> dict:
         import msgpack
-        import msgpack_numpy
-        msgpack_numpy.patch()
 
-        # 使用 msgpack 序列化（支持 numpy 数组）
-        data = msgpack.packb(request_data, default=msgpack_numpy.encode)
+        # 使用 OpenPI 兼容的 msgpack 序列化
+        data = msgpack.packb(request_data, default=self._pack_array)
         self._ws.send(data)
         response = self._ws.recv()
         
         if isinstance(response, str):
             raise RuntimeError(f"Error from server: {response}")
         
-        result = msgpack.unpackb(response, raw=False, object_hook=msgpack_numpy.decode)
+        result = msgpack.unpackb(response, object_hook=self._unpack_array)
         return result
 
 
