@@ -63,10 +63,9 @@ class Gen3ReachCameraSceneCfg(ReachSceneCfg):
             # 相机位置：在机器人前方 1m，侧面 0.5m，高度 0.8m
             pos=(1.0, 0.5, 0.8),
             # 四元数 (w, x, y, z)：让相机朝向原点
-            # 相机默认朝 +Y 方向，需要：
-            # 1. 绕 Z 轴旋转约 -153°（使 Y 轴指向 -X -Y 方向，即朝向原点）
-            # 2. 绕新 X 轴向下倾斜约 35°（看向下方的机器人）
-            rot=(0.255, 0.270, -0.557, 0.743),
+            # 相机坐标系：X=前方, Y=左侧, Z=上方
+            # 需要绕 Z 轴旋转约 207°，再向下倾斜约 35°
+            rot=(-0.137, -0.255, 0.147, 0.946),
             convention="world",
         ),
     )
@@ -113,6 +112,75 @@ class Gen3ReachCameraSceneCfg(ReachSceneCfg):
             pos=(0.5, 0.0, 0.025),  # 在机器人前方 0.5m，桌面高度 5cm
         ),
     )
+
+    # ========== 相机方向调试用小球（相机位置 1.0, 0.5, 0.8）==========
+    # 前方 (+X) - 红色
+    debug_front: RigidObjectCfg = RigidObjectCfg(
+        prim_path="{ENV_REGEX_NS}/DebugFront",
+        spawn=sim_utils.SphereCfg(
+            radius=0.03,
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True),
+            collision_props=sim_utils.CollisionPropertiesCfg(collision_enabled=False),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0)),  # 红
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(1.3, 0.5, 0.8)),  # +X
+    )
+    # 后方 (-X) - 绿色
+    debug_back: RigidObjectCfg = RigidObjectCfg(
+        prim_path="{ENV_REGEX_NS}/DebugBack",
+        spawn=sim_utils.SphereCfg(
+            radius=0.03,
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True),
+            collision_props=sim_utils.CollisionPropertiesCfg(collision_enabled=False),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),  # 绿
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.7, 0.5, 0.8)),  # -X
+    )
+    # 左侧 (+Y) - 蓝色
+    debug_left: RigidObjectCfg = RigidObjectCfg(
+        prim_path="{ENV_REGEX_NS}/DebugLeft",
+        spawn=sim_utils.SphereCfg(
+            radius=0.03,
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True),
+            collision_props=sim_utils.CollisionPropertiesCfg(collision_enabled=False),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 0.0, 1.0)),  # 蓝
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(1.0, 0.8, 0.8)),  # +Y
+    )
+    # 右侧 (-Y) - 黄色
+    debug_right: RigidObjectCfg = RigidObjectCfg(
+        prim_path="{ENV_REGEX_NS}/DebugRight",
+        spawn=sim_utils.SphereCfg(
+            radius=0.03,
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True),
+            collision_props=sim_utils.CollisionPropertiesCfg(collision_enabled=False),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 1.0, 0.0)),  # 黄
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(1.0, 0.2, 0.8)),  # -Y
+    )
+    # 上方 (+Z) - 白色
+    debug_up: RigidObjectCfg = RigidObjectCfg(
+        prim_path="{ENV_REGEX_NS}/DebugUp",
+        spawn=sim_utils.SphereCfg(
+            radius=0.03,
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True),
+            collision_props=sim_utils.CollisionPropertiesCfg(collision_enabled=False),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 1.0, 1.0)),  # 白
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(1.0, 0.5, 1.1)),  # +Z
+    )
+    # 下方 (-Z) - 紫色
+    debug_down: RigidObjectCfg = RigidObjectCfg(
+        prim_path="{ENV_REGEX_NS}/DebugDown",
+        spawn=sim_utils.SphereCfg(
+            radius=0.03,
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True),
+            collision_props=sim_utils.CollisionPropertiesCfg(collision_enabled=False),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.5, 0.0, 0.5)),  # 紫
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(1.0, 0.5, 0.5)),  # -Z
+    )
+    # ========== 相机方向调试用小球结束 ==========
 
     # 可抓取的小球 - 红色球体，放在桌子上
     target_ball: RigidObjectCfg = RigidObjectCfg(
