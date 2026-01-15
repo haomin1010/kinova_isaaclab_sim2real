@@ -254,17 +254,23 @@ def resize_image_with_pad(image: np.ndarray, target_height: int, target_width: i
     return np.array(result)
 
 
-def get_camera_images(env, env_idx: int = 0) -> dict:
+def get_camera_images(env, env_idx: int = 0, timestep: int = 0) -> dict:
     """
     从环境中获取相机图像。
 
     Args:
         env: Isaac Lab 环境
         env_idx: 环境索引
+        timestep: 当前时间步（用于调试）
 
     Returns:
         包含相机图像的字典
     """
+    # #region agent log
+    import json
+    LOG_PATH = "/home/lihaomin/workspace/kinova_isaaclab_sim2real/.cursor/debug.log"
+    # #endregion
+    
     images = {}
     unwrapped_env = env.unwrapped
 
@@ -273,8 +279,19 @@ def get_camera_images(env, env_idx: int = 0) -> dict:
 
     scene = unwrapped_env.scene
     sensors_dict = getattr(scene, "sensors", {}) or {}
+    
+    # #region agent log
+    # 假设1: 检查是否需要手动 update 相机
+    if timestep < 5:  # 只在前5帧记录详细日志
+        for cam_key in [args_cli.external_camera_key, args_cli.wrist_camera_key]:
+            if cam_key in sensors_dict:
+                cam = sensors_dict[cam_key]
+                log_entry = {"timestamp": time.time()*1000, "sessionId": "debug-session", "hypothesisId": "H1_camera_update", "location": "play.py:get_camera_images", "message": f"Camera {cam_key} state", "data": {"timestep": timestep, "has_update_method": hasattr(cam, 'update'), "cam_type": str(type(cam))}}
+                with open(LOG_PATH, "a") as f:
+                    f.write(json.dumps(log_entry) + "\n")
+    # #endregion
 
-    def _get_camera_rgb(camera):
+    def _get_camera_rgb(camera, cam_name=""):
         """从相机传感器获取 RGB 图像"""
         if camera is None or not hasattr(camera, "data"):
             return None
@@ -286,6 +303,18 @@ def get_camera_images(env, env_idx: int = 0) -> dict:
             rgb_data = camera_data.rgb
         if rgb_data is not None:
             img = rgb_data[env_idx].cpu().numpy()
+            
+            # #region agent log
+            # 假设2/3: 检查图像数据是否变化
+            if timestep < 10:
+                img_hash = hash(img.tobytes()[:1000])  # 只哈希前1000字节
+                img_mean = float(img.mean())
+                img_std = float(img.std())
+                log_entry = {"timestamp": time.time()*1000, "sessionId": "debug-session", "hypothesisId": "H2_image_data", "location": "play.py:_get_camera_rgb", "message": f"Image data for {cam_name}", "data": {"timestep": timestep, "img_hash": img_hash, "img_mean": img_mean, "img_std": img_std, "shape": list(img.shape), "rgb_data_id": id(rgb_data)}}
+                with open(LOG_PATH, "a") as f:
+                    f.write(json.dumps(log_entry) + "\n")
+            # #endregion
+            
             if img.shape[-1] == 4:
                 img = img[..., :3]
             return img.astype(np.uint8)
@@ -293,12 +322,12 @@ def get_camera_images(env, env_idx: int = 0) -> dict:
 
     # 通过 sensors 字典访问相机
     if args_cli.external_camera_key in sensors_dict:
-        img = _get_camera_rgb(sensors_dict[args_cli.external_camera_key])
+        img = _get_camera_rgb(sensors_dict[args_cli.external_camera_key], "external")
         if img is not None:
             images["external_image"] = img
 
     if args_cli.wrist_camera_key in sensors_dict:
-        img = _get_camera_rgb(sensors_dict[args_cli.wrist_camera_key])
+        img = _get_camera_rgb(sensors_dict[args_cli.wrist_camera_key], "wrist")
         if img is not None:
             images["wrist_image"] = img
 
@@ -511,8 +540,18 @@ def main():
         try:
             # run everything in inference mode
             with torch.inference_mode():
+                # #region agent log
+                # 假设4: 检查 step 前后的差异
+                import json
+                LOG_PATH = "/home/lihaomin/workspace/kinova_isaaclab_sim2real/.cursor/debug.log"
+                if timestep < 5:
+                    log_entry = {"timestamp": time.time()*1000, "sessionId": "debug-session", "hypothesisId": "H4_timing", "location": "play.py:main_loop", "message": "Before get_camera_images", "data": {"timestep": timestep}}
+                    with open(LOG_PATH, "a") as f:
+                        f.write(json.dumps(log_entry) + "\n")
+                # #endregion
+                
                 # Get camera images and robot state
-                camera_images = get_camera_images(env, env_idx=0)
+                camera_images = get_camera_images(env, env_idx=0, timestep=timestep)
                 robot_state = get_robot_state(env, env_idx=0)
 
                 # 保存相机图像（最多保存 max_saved_images 张）
@@ -568,6 +607,28 @@ def main():
 
                 # Step environment
                 obs, rewards, terminated, truncated, info = env.step(action_tensor)
+                
+                # #region agent log
+                # 假设5: 检查 step 后的状态和图像
+                if timestep < 5:
+                    robot_state_after = get_robot_state(env, env_idx=0)
+                    joint_pos_after = robot_state_after.get("joint_position", None)
+                    joint_pos_before = robot_state.get("joint_position", None)
+                    pos_changed = "N/A"
+                    if joint_pos_after is not None and joint_pos_before is not None:
+                        pos_changed = not np.allclose(joint_pos_after, joint_pos_before, atol=1e-6)
+                    log_entry = {"timestamp": time.time()*1000, "sessionId": "debug-session", "hypothesisId": "H5_step_effect", "location": "play.py:after_step", "message": "After env.step", "data": {"timestep": timestep, "joint_pos_changed": pos_changed, "action_applied": action.tolist()[:3] if action is not None else None}}
+                    with open(LOG_PATH, "a") as f:
+                        f.write(json.dumps(log_entry) + "\n")
+                    
+                    # 在 step 后再次获取相机图像，检查是否不同
+                    camera_images_after = get_camera_images(env, env_idx=0, timestep=timestep)
+                    if "external_image" in camera_images and "external_image" in camera_images_after:
+                        img_same = np.array_equal(camera_images["external_image"], camera_images_after["external_image"])
+                        log_entry = {"timestamp": time.time()*1000, "sessionId": "debug-session", "hypothesisId": "H6_before_after", "location": "play.py:compare_images", "message": "Compare before/after step", "data": {"timestep": timestep, "images_identical": img_same}}
+                        with open(LOG_PATH, "a") as f:
+                            f.write(json.dumps(log_entry) + "\n")
+                # #endregion
 
             timestep += 1
 
