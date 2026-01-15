@@ -60,12 +60,12 @@ class Gen3ReachCameraSceneCfg(ReachSceneCfg):
             clipping_range=(0.01, 20.0),
         ),
         offset=CameraCfg.OffsetCfg(
-            # 相机位置：在机器人左侧 1m，高度 0.8m
-            pos=(0.0, 1.0, 0.8),
+            # 相机位置：在机器人左前方，高度 0.8m
+            pos=(0.3, 1.0, 0.8),
             # 四元数 (w, x, y, z)：让相机朝向机器人
-            # 需要朝 -Y 方向，并向下倾斜约 27°
-            # 绕 Z 轴旋转 -90°，再向下倾斜
-            rot=(0.687, 0.165, -0.165, -0.687),
+            # 方向：稍微 -X，主要 -Y，向下倾斜约 26°
+            # 绕 Z 轴旋转约 -107°，再向下倾斜
+            rot=(0.581, 0.132, -0.178, -0.783),
             convention="world",
         ),
     )
@@ -113,7 +113,7 @@ class Gen3ReachCameraSceneCfg(ReachSceneCfg):
         ),
     )
 
-    # ========== 相机方向调试用小球（相机位置 0, 1.0, 0.8）==========
+    # ========== 相机方向调试用小球（相机位置 0.3, 1.0, 0.8）==========
     # 前方 (+X) - 红色
     debug_front: RigidObjectCfg = RigidObjectCfg(
         prim_path="{ENV_REGEX_NS}/DebugFront",
@@ -123,7 +123,7 @@ class Gen3ReachCameraSceneCfg(ReachSceneCfg):
             collision_props=sim_utils.CollisionPropertiesCfg(collision_enabled=False),
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0)),  # 红
         ),
-        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.3, 1.0, 0.8)),  # +X
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.6, 1.0, 0.8)),  # +X
     )
     # 后方 (-X) - 绿色
     debug_back: RigidObjectCfg = RigidObjectCfg(
@@ -134,7 +134,7 @@ class Gen3ReachCameraSceneCfg(ReachSceneCfg):
             collision_props=sim_utils.CollisionPropertiesCfg(collision_enabled=False),
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),  # 绿
         ),
-        init_state=RigidObjectCfg.InitialStateCfg(pos=(-0.3, 1.0, 0.8)),  # -X
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.0, 1.0, 0.8)),  # -X
     )
     # 左侧 (+Y) - 蓝色
     debug_left: RigidObjectCfg = RigidObjectCfg(
@@ -145,7 +145,7 @@ class Gen3ReachCameraSceneCfg(ReachSceneCfg):
             collision_props=sim_utils.CollisionPropertiesCfg(collision_enabled=False),
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 0.0, 1.0)),  # 蓝
         ),
-        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.0, 1.3, 0.8)),  # +Y
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.3, 1.3, 0.8)),  # +Y
     )
     # 右侧 (-Y) - 黄色
     debug_right: RigidObjectCfg = RigidObjectCfg(
@@ -156,7 +156,7 @@ class Gen3ReachCameraSceneCfg(ReachSceneCfg):
             collision_props=sim_utils.CollisionPropertiesCfg(collision_enabled=False),
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 1.0, 0.0)),  # 黄
         ),
-        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.0, 0.7, 0.8)),  # -Y
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.3, 0.7, 0.8)),  # -Y
     )
     # 上方 (+Z) - 白色
     debug_up: RigidObjectCfg = RigidObjectCfg(
@@ -167,7 +167,7 @@ class Gen3ReachCameraSceneCfg(ReachSceneCfg):
             collision_props=sim_utils.CollisionPropertiesCfg(collision_enabled=False),
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 1.0, 1.0)),  # 白
         ),
-        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.0, 1.0, 1.1)),  # +Z
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.3, 1.0, 1.1)),  # +Z
     )
     # 下方 (-Z) - 紫色
     debug_down: RigidObjectCfg = RigidObjectCfg(
@@ -178,7 +178,7 @@ class Gen3ReachCameraSceneCfg(ReachSceneCfg):
             collision_props=sim_utils.CollisionPropertiesCfg(collision_enabled=False),
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.5, 0.0, 0.5)),  # 紫
         ),
-        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.0, 1.0, 0.5)),  # -Z
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.3, 1.0, 0.5)),  # -Z
     )
     # ========== 相机方向调试用小球结束 ==========
 
