@@ -323,14 +323,25 @@ def get_camera_images(env, env_idx: int = 0, timestep: int = 0) -> dict:
             return img.astype(np.uint8)
         return None
 
+    # 获取物理时间步长用于更新传感器
+    dt = getattr(unwrapped_env, "physics_dt", 1.0 / 60.0)
+    
     # 通过 sensors 字典访问相机
     if args_cli.external_camera_key in sensors_dict:
-        img = _get_camera_rgb(sensors_dict[args_cli.external_camera_key], "external")
+        cam = sensors_dict[args_cli.external_camera_key]
+        # 手动更新相机传感器以刷新图像数据
+        if hasattr(cam, 'update'):
+            cam.update(dt)
+        img = _get_camera_rgb(cam, "external")
         if img is not None:
             images["external_image"] = img
 
     if args_cli.wrist_camera_key in sensors_dict:
-        img = _get_camera_rgb(sensors_dict[args_cli.wrist_camera_key], "wrist")
+        cam = sensors_dict[args_cli.wrist_camera_key]
+        # 手动更新相机传感器以刷新图像数据
+        if hasattr(cam, 'update'):
+            cam.update(dt)
+        img = _get_camera_rgb(cam, "wrist")
         if img is not None:
             images["wrist_image"] = img
 
