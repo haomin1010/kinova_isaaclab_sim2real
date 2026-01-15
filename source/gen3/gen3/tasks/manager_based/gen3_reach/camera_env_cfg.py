@@ -23,7 +23,7 @@ import isaaclab_tasks.manager_based.manipulation.reach.mdp as mdp
 from isaaclab_tasks.manager_based.manipulation.reach.reach_env_cfg import ReachEnvCfg
 
 # 导入 ReachEnvCfg 使用的场景配置
-from isaaclab_tasks.manager_based.manipulation.reach.reach_env_cfg import ManipulationSceneCfg
+from isaaclab_tasks.manager_based.manipulation.reach.reach_env_cfg import ReachSceneCfg
 
 ##
 # Pre-defined configs
@@ -37,11 +37,11 @@ from isaaclab_assets import KINOVA_GEN3_N7_CFG  # isort: skip
 
 
 @configclass
-class Gen3ReachCameraSceneCfg(ManipulationSceneCfg):
+class Gen3ReachCameraSceneCfg(ReachSceneCfg):
     """
     带相机的场景配置。
 
-    继承自 ManipulationSceneCfg，添加两个相机传感器。
+    继承自 ReachSceneCfg，添加两个相机传感器。
     """
 
     # 外部相机 - 固定在场景中，提供第三人称视角
