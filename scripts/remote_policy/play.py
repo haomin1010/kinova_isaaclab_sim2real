@@ -546,7 +546,10 @@ def main():
                 # #region agent log
                 # 假设4: 检查 step 前后的差异
                 import json
-                LOG_PATH = "/home/lihaomin/workspace/kinova_isaaclab_sim2real/.cursor/debug.log"
+                import pathlib
+                LOG_DIR = pathlib.Path(__file__).parent.parent.parent / ".cursor"
+                LOG_DIR.mkdir(parents=True, exist_ok=True)
+                LOG_PATH = str(LOG_DIR / "debug.log")
                 if timestep < 5:
                     log_entry = {"timestamp": time.time()*1000, "sessionId": "debug-session", "hypothesisId": "H4_timing", "location": "play.py:main_loop", "message": "Before get_camera_images", "data": {"timestep": timestep}}
                     with open(LOG_PATH, "a") as f:
