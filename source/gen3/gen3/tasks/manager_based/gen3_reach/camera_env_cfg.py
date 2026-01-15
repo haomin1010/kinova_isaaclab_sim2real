@@ -45,6 +45,7 @@ class Gen3ReachCameraSceneCfg(ReachSceneCfg):
     """
 
     # 外部相机 - 固定在场景中，提供第三人称视角
+    # 位置在机器人前方斜上方，朝向机器人基座
     external_camera: CameraCfg = CameraCfg(
         prim_path="{ENV_REGEX_NS}/ExternalCamera",
         update_period=0.0,  # 每个物理步都更新
@@ -55,16 +56,20 @@ class Gen3ReachCameraSceneCfg(ReachSceneCfg):
             focal_length=24.0,
             focus_distance=400.0,
             horizontal_aperture=20.955,
-            clipping_range=(0.1, 100.0),
+            clipping_range=(0.01, 20.0),
         ),
         offset=CameraCfg.OffsetCfg(
-            pos=(1.5, 1.5, 1.2),  # 相机位置：斜上方观察
-            rot=(0.653, 0.271, 0.271, 0.653),  # 朝向机器人工作区
+            # 相机位置：在机器人前方 1m，侧面 0.5m，高度 0.8m
+            pos=(1.0, 0.5, 0.8),
+            # 四元数使相机朝向原点（机器人基座）
+            # 这个四元数让相机面向 -x 方向并稍微向下看
+            rot=(0.683, 0.183, 0.183, 0.683),
             convention="world",
         ),
     )
 
     # 腕部相机 - 安装在机器人末端执行器上
+    # 朝向末端执行器前方
     wrist_camera: CameraCfg = CameraCfg(
         prim_path="{ENV_REGEX_NS}/Robot/end_effector_link/WristCamera",
         update_period=0.0,  # 每个物理步都更新
@@ -75,11 +80,13 @@ class Gen3ReachCameraSceneCfg(ReachSceneCfg):
             focal_length=24.0,
             focus_distance=400.0,
             horizontal_aperture=20.955,
-            clipping_range=(0.01, 100.0),
+            clipping_range=(0.01, 20.0),
         ),
         offset=CameraCfg.OffsetCfg(
-            pos=(0.05, 0.0, 0.02),  # 相对于末端执行器的偏移
-            rot=(0.5, -0.5, 0.5, -0.5),  # 朝下看
+            # 相对于末端执行器的偏移：稍微向前
+            pos=(0.1, 0.0, 0.0),
+            # 朝向末端执行器前方（沿 x 轴）
+            rot=(0.5, -0.5, 0.5, -0.5),
             convention="ros",
         ),
     )
