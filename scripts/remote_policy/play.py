@@ -326,6 +326,31 @@ def get_camera_images(env, env_idx: int = 0, timestep: int = 0) -> dict:
     # 获取物理时间步长用于更新传感器
     dt = getattr(unwrapped_env, "physics_dt", 1.0 / 60.0)
     
+    # #region agent log
+    # H7/H8/H9: 尝试不同的更新方式
+    if timestep < 3:
+        # 检查相机配置
+        for cam_key in [args_cli.external_camera_key, args_cli.wrist_camera_key]:
+            if cam_key in sensors_dict:
+                cam = sensors_dict[cam_key]
+                cfg_info = {}
+                if hasattr(cam, 'cfg'):
+                    cfg = cam.cfg
+                    cfg_info["update_period"] = getattr(cfg, 'update_period', 'N/A')
+                    cfg_info["data_types"] = getattr(cfg, 'data_types', 'N/A')
+                log_entry = {"timestamp": time.time()*1000, "sessionId": "debug-session", "hypothesisId": "H8_config", "location": "play.py:get_camera_images", "message": f"Camera {cam_key} config", "data": {"timestep": timestep, "cfg": cfg_info}}
+                with open(LOG_PATH, "a") as f:
+                    f.write(json.dumps(log_entry) + "\n")
+    # #endregion
+    
+    # H7: 尝试先渲染
+    if hasattr(unwrapped_env, 'sim') and hasattr(unwrapped_env.sim, 'render'):
+        unwrapped_env.sim.render()
+    
+    # H9: 尝试更新整个场景
+    if hasattr(scene, 'update'):
+        scene.update(dt)
+    
     # 通过 sensors 字典访问相机
     if args_cli.external_camera_key in sensors_dict:
         cam = sensors_dict[args_cli.external_camera_key]
