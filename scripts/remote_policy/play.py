@@ -556,15 +556,6 @@ def main():
     pred_action_chunk = None
     actions_from_chunk_completed = 0
 
-    # 创建图像保存文件夹
-    import datetime
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    image_save_dir = f"camera_images_{timestamp}"
-    os.makedirs(image_save_dir, exist_ok=True)
-    max_saved_images = 200
-    saved_image_count = 0
-    print(f"[INFO] Camera images will be saved to: {image_save_dir}/ (max {max_saved_images} frames)")
-
     # reset environment
     obs, info = env.reset()
 
@@ -597,16 +588,6 @@ def main():
                 # Get camera images and robot state
                 camera_images = get_camera_images(env, env_idx=0, timestep=timestep)
                 robot_state = get_robot_state(env, env_idx=0)
-
-                # 保存相机图像（最多保存 max_saved_images 张）
-                if saved_image_count < max_saved_images and camera_images:
-                    if "external_image" in camera_images:
-                        ext_img = Image.fromarray(camera_images["external_image"])
-                        ext_img.save(os.path.join(image_save_dir, f"external_{timestep:04d}.png"))
-                    if "wrist_image" in camera_images:
-                        wrist_img = Image.fromarray(camera_images["wrist_image"])
-                        wrist_img.save(os.path.join(image_save_dir, f"wrist_{timestep:04d}.png"))
-                    saved_image_count += 1
 
                 # Save debug images if requested
                 if args_cli.save_debug_images and timestep % 10 == 0:
@@ -703,7 +684,6 @@ def main():
             break
 
     print(f"\n[INFO] Evaluation complete. Total steps: {timestep}")
-    print(f"[INFO] Saved {saved_image_count} camera frames to: {image_save_dir}/")
 
     # close the simulator
     env.close()
