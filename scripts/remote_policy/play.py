@@ -609,6 +609,7 @@ def main():
                         response = policy_client.infer(request_data)
 
                     pred_action_chunk = response["actions"]
+                    print(f"pred_action_chunk: {pred_action_chunk}")
 
                     # Ensure action chunk has correct shape
                     if pred_action_chunk.ndim == 1:
@@ -624,6 +625,17 @@ def main():
                     action = action[..., :7]
                     gripper_position = action[-1]
 
+                # Debug: 打印 action 和 joint_pos 的关系
+                if timestep < 10:
+                    joint_pos_before = robot_state.get("joint_position", None)
+                    # 计算预期的目标位置（根据配置：default_pos + action * scale）
+                    # 注意：我们不知道 default_pos，但可以计算 action * scale
+                    action_scaled = action * 0.5  # scale=0.5
+                    print(f"\n[DEBUG] Step {timestep}:")
+                    print(f"  Raw action: {action}")
+                    print(f"  Action * scale (0.5): {action_scaled}")
+                    print(f"  Joint pos before: {joint_pos_before}")
+
                 # Convert to torch tensor and expand for all environments
                 action_tensor = torch.tensor(action, device=env.unwrapped.device, dtype=torch.float32)
                 if action_tensor.ndim == 1:
@@ -634,6 +646,20 @@ def main():
 
                 # Step environment
                 obs, rewards, terminated, truncated, info = env.step(action_tensor)
+                
+                # Debug: 打印 step 后的 joint_pos 变化
+                if timestep < 10:
+                    robot_state_after = get_robot_state(env, env_idx=0)
+                    joint_pos_after = robot_state_after.get("joint_position", None)
+                    joint_pos_before = robot_state.get("joint_position", None)
+                    if joint_pos_after is not None and joint_pos_before is not None:
+                        joint_pos_delta = joint_pos_after - joint_pos_before
+                        action_scaled = action * 0.5
+                        print(f"  Joint pos after: {joint_pos_after}")
+                        print(f"  Joint pos delta (actual): {joint_pos_delta}")
+                        print(f"  Action * scale (expected delta): {action_scaled}")
+                        print(f"  Difference: {joint_pos_delta - action_scaled}")
+                        print(f"  Ratio (delta/action_scaled): {joint_pos_delta / (action_scaled + 1e-8)}")
                 
                 # #region agent log
                 # 假设5: 检查 step 后的状态和图像
