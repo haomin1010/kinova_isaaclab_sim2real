@@ -406,8 +406,8 @@ def get_robot_state(env, env_idx: int = 0) -> dict:
             state["joint_position"] = robot.data.joint_pos[env_idx].cpu().numpy()
 
         # 获取关节速度
-        if hasattr(robot.data, "joint_vel"):
-            state["joint_velocity"] = robot.data.joint_vel[env_idx].cpu().numpy()
+        # if hasattr(robot.data, "joint_vel"):
+        #     state["joint_velocity"] = robot.data.joint_vel[env_idx].cpu().numpy()
 
         # 获取末端执行器位置
         if hasattr(robot.data, "body_pos_w"):
@@ -421,6 +421,7 @@ def prepare_request_data(
         robot_state: dict,
         prompt: str = "",
         image_size: int = 224,
+        gripper_position: float = 1.0,
 ) -> dict:
     """
     准备发送到策略服务器的请求数据。
@@ -454,7 +455,7 @@ def prepare_request_data(
 
     # 模拟夹爪位置（如果策略需要）
     # 注意：Kinova Gen3 的夹爪可能需要单独处理
-    request_data["observation/gripper_position"] = np.array([0.0])
+    request_data["observation/gripper_position"] = np.array([gripper_position])
 
     # 添加任务提示
     if prompt:
@@ -573,6 +574,7 @@ def main():
     print("[INFO] Press Ctrl+C to stop.\n")
 
     # simulate environment
+    gripper_position = 1.0
     while simulation_app.is_running() and timestep < args_cli.max_timesteps:
         start_time = time.time()
 
@@ -619,6 +621,7 @@ def main():
                         robot_state=robot_state,
                         prompt=args_cli.prompt,
                         image_size=args_cli.image_size,
+                        gripper_position=gripper_position,
                     )
                     # Query remote policy server
                     with prevent_keyboard_interrupt():
@@ -638,6 +641,7 @@ def main():
                 # 丢弃最后一维（夹爪）
                 if action.shape[-1] == 8:
                     action = action[..., :7]
+                    gripper_position = action[-1]
 
                 # Convert to torch tensor and expand for all environments
                 action_tensor = torch.tensor(action, device=env.unwrapped.device, dtype=torch.float32)
