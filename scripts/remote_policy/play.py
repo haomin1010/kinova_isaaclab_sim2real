@@ -416,6 +416,7 @@ def get_robot_state(env, env_idx: int = 0) -> dict:
         # 获取关节位置
         if hasattr(robot.data, "joint_pos"):
             state["joint_position"] = robot.data.joint_pos[env_idx].cpu().numpy()
+            state["joint_position_target"] = robot.data.joint_pos_target[env_idx].cpu().numpy()
 
         # 获取关节速度
         # if hasattr(robot.data, "joint_vel"):
@@ -631,7 +632,7 @@ def main():
                         response = policy_client.infer(request_data)
 
                     pred_action_chunk = response["actions"]
-                    print(f"pred_action_chunk: {pred_action_chunk}")
+                    #print(f"pred_action_chunk: {pred_action_chunk}")
 
                     # Ensure action chunk has correct shape
                     if pred_action_chunk.ndim == 1:
@@ -681,6 +682,7 @@ def main():
                 if timestep < 5:
                     robot_state_after = get_robot_state(env, env_idx=0)
                     joint_pos_after = robot_state_after.get("joint_position", None)
+                    print(f"  Joint pos after: {joint_pos_after}")
                     joint_pos_before = robot_state.get("joint_position", None)
                     pos_changed = "N/A"
                     if joint_pos_after is not None and joint_pos_before is not None:
