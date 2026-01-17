@@ -682,7 +682,9 @@ def main():
                 if timestep < 5:
                     robot_state_after = get_robot_state(env, env_idx=0)
                     joint_pos_after = robot_state_after.get("joint_position", None)
+                    joint_pos_target_after = robot_state_after.get("joint_position_target", None)
                     print(f"  Joint pos after: {joint_pos_after}")
+                    print(f"  Joint pos target after: {joint_pos_target_after}")
                     joint_pos_before = robot_state.get("joint_position", None)
                     pos_changed = "N/A"
                     if joint_pos_after is not None and joint_pos_before is not None:
