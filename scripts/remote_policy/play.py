@@ -45,6 +45,18 @@ parser.add_argument(
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, required=True, help="Name of the task.")
 parser.add_argument("--real-time", action="store_true", default=False, help="Run in real-time, if possible.")
+parser.add_argument(
+    "--sim-dt",
+    type=float,
+    default=None,
+    help="Override simulation timestep (dt) in seconds. If not set, uses default from environment config.",
+)
+parser.add_argument(
+    "--decimation",
+    type=int,
+    default=None,
+    help="Override decimation value. If not set, uses default from environment config.",
+)
 
 # Remote policy server arguments
 parser.add_argument("--remote-host", type=str, default="0.0.0.0", help="Remote policy server IP address.")
@@ -506,6 +518,14 @@ def main():
         use_fabric=not args_cli.disable_fabric,
     )
 
+    # Override physics parameters if specified
+    if args_cli.sim_dt is not None:
+        env_cfg.sim.dt = args_cli.sim_dt
+        print(f"[INFO] Overriding sim.dt to {args_cli.sim_dt}")
+    if args_cli.decimation is not None:
+        env_cfg.decimation = args_cli.decimation
+        print(f"[INFO] Overriding decimation to {args_cli.decimation}")
+
     # create isaac environment
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
 
@@ -669,7 +689,13 @@ def main():
                         print(f"  Joint pos delta (actual step change): {joint_pos_delta}")
                         print(f"  Error to target BEFORE step: {error_before}")
                         print(f"  Error to target AFTER step: {error_after}")
-                        print(f"  Error reduction (how much closer to target): {error_before - error_after}")
+                        abs_error_before = np.abs(error_before)
+                        abs_error_after = np.abs(error_after)
+                        abs_error_reduction = abs_error_before - abs_error_after
+                        print(f"  Absolute error BEFORE: {abs_error_before}")
+                        print(f"  Absolute error AFTER: {abs_error_after}")
+                        print(f"  Absolute error reduction: {abs_error_reduction}")
+                        print(f"  -> Positive = closer to target, Negative = farther from target")
                         print(f"  Note: action*scale is TARGET increment, not step change!")
                 
                 # #region agent log
