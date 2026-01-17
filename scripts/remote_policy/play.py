@@ -571,7 +571,9 @@ def main():
             print("[WARNING] No cameras found! Make sure to use a task with camera sensors.")
 
     dt = env.unwrapped.physics_dt
-
+    
+    print(f"[INFO] Simulation timestep: {dt}")
+    print(f"[INFO] Decimation: {env_cfg.decimation}")
     # Action chunk management
     pred_action_chunk = None
     actions_from_chunk_completed = 0
@@ -653,14 +655,7 @@ def main():
                     default_pos = np.array([0.0, 0.65, 0.0, 1.89, 0.0, 0.6, -1.57])
                     action_scaled = action * 0.5  # scale=0.5
                     target_joint_pos = default_pos + action_scaled
-                    print(f"\n[DEBUG] Step {timestep}:")
                     print(f"  Raw action: {action}")
-                    print(f"  Action * scale (0.5): {action_scaled}")
-                    print(f"  Target joint pos (default + action*scale): {target_joint_pos}")
-                    print(f"  Joint pos before: {joint_pos_before}")
-                    if joint_pos_before is not None:
-                        error_to_target = target_joint_pos - joint_pos_before
-                        print(f"  Error to target (target - current): {error_to_target}")
 
                 # Convert to torch tensor and expand for all environments
                 action_tensor = torch.tensor(action, device=env.unwrapped.device, dtype=torch.float32)
@@ -679,24 +674,7 @@ def main():
                     joint_pos_after = robot_state_after.get("joint_position", None)
                     joint_pos_before = robot_state.get("joint_position", None)
                     if joint_pos_after is not None and joint_pos_before is not None:
-                        joint_pos_delta = joint_pos_after - joint_pos_before
-                        action_scaled = action * 0.5
-                        default_pos = np.array([0.0, 0.65, 0.0, 1.89, 0.0, 0.6, -1.57])
-                        target_joint_pos = default_pos + action_scaled
-                        error_before = target_joint_pos - joint_pos_before
-                        error_after = target_joint_pos - joint_pos_after
                         print(f"  Joint pos after: {joint_pos_after}")
-                        print(f"  Joint pos delta (actual step change): {joint_pos_delta}")
-                        print(f"  Error to target BEFORE step: {error_before}")
-                        print(f"  Error to target AFTER step: {error_after}")
-                        abs_error_before = np.abs(error_before)
-                        abs_error_after = np.abs(error_after)
-                        abs_error_reduction = abs_error_before - abs_error_after
-                        print(f"  Absolute error BEFORE: {abs_error_before}")
-                        print(f"  Absolute error AFTER: {abs_error_after}")
-                        print(f"  Absolute error reduction: {abs_error_reduction}")
-                        print(f"  -> Positive = closer to target, Negative = farther from target")
-                        print(f"  Note: action*scale is TARGET increment, not step change!")
                 
                 # #region agent log
                 # 假设5: 检查 step 后的状态和图像
