@@ -669,17 +669,10 @@ def main():
                 # Step environment
                 obs, rewards, terminated, truncated, info = env.step(action_tensor)
                 
-                # Debug: 打印 step 后的 joint_pos 变化
-                if timestep < 10:
-                    robot_state_after = get_robot_state(env, env_idx=0)
-                    joint_pos_after = robot_state_after.get("joint_position", None)
-                    joint_pos_before = robot_state.get("joint_position", None)
-                    if joint_pos_after is not None and joint_pos_before is not None:
-                        print(f"  Joint pos after: {joint_pos_after}")
                 
                 # #region agent log
                 # 假设5: 检查 step 后的状态和图像
-                if timestep < 5:
+                if timestep < 10:
                     robot_state_after = get_robot_state(env, env_idx=0)
                     joint_pos_after = robot_state_after.get("joint_position", None)
                     joint_pos_target_after = robot_state_after.get("joint_position_target", None)
