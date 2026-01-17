@@ -131,7 +131,7 @@ class Gen3ReachCameraSceneCfg(ReachSceneCfg):
             ),
         ),
         init_state=RigidObjectCfg.InitialStateCfg(
-            pos=(0.5, 0.0, 0.1),  # 在桌子上方（桌面高度 0.05 + 球半径 0.04 + 一点余量）
+            pos=(0.6, 0.3, 0.1),  # 在桌子上方（桌面高度 0.05 + 球半径 0.04 + 一点余量）
         ),
     )
 
