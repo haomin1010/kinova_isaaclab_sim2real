@@ -171,7 +171,7 @@ class Gen3ReachCameraEnvCfg(ReachEnvCfg):
 
         # override actions
         self.actions.arm_action = mdp.JointPositionActionCfg(
-            asset_name="robot", joint_names=[".*"], scale=0.5, use_default_offset=True
+            asset_name="robot", joint_names=[".*"], scale=0.5, use_default_offset=False
         )
 
         # override command generator body
